@@ -1,145 +1,100 @@
+#include <Arduino.h>
 #include <Romi32U4.h>
-#include <Servo.h> 
+#include <Chassis.h>
+#include <servo32u4.h>
+#include <BlueMotor.h>
 
-#define ServoPin 12
+Chassis chassis;
+Romi32U4ButtonB buttonB;
 
-Servo servo;
+// DT Control variables
+int leftEffort = 0; // Effort of left DT motor
+int rightEffort = 0; // Effort of right DT motor
+int dtIncrement = 20; // Effort
 
-Romi32U4Encoders encoders;
-Romi32U4LCD lcd;
-Romi32U4Buzzer buzzer;
-Romi32U4Motors motors;
-Romi32U4ButtonA buttonA;
-Romi32U4ButtonC buttonC;
+// Blue motor control variables
+BlueMotor blueMotor; // The Blue Motor object
+int blueEffort = 0; // Effort to send to the blue motor (only runs above approximately +/-150 effort)
+int blueIncrement = 20; // The amount to increment the blue motor effort by when requested
 
-int val;
-int command = 0;
-int speed_right = 0;
-int speed_left = 0;
-int target_right = 0;
-int target_left = 0;
-int ticksPerCm = 59; // Approximate number of ticks per cm 
-int ticksPerDegree = 780/90; // Approximate number of ticks per 1 degree of rotation around the Romi's axis
-String lastCommand = "";
-float Kp = 0.7; // Proportional coefficient
-long count = 0;
-unsigned time = 0;
-
-void isr() {
-  if (digitalRead(1)) {
-    count++;
-  } else {
-    count--;
-  }
-} 
+// Servo control variables
+Servo32U4Pin5 servo1;
+Servo32U4Pin13 servo2;
+int servo1Pos = 1500; // Position of servo 1 (microseconds)
+int servo2Pos = 1500; // Position of servo 2 (microseconds)
+int servoIncrement = 50; // The amount to increment the servo position by (microseconds)
 
 void setup() {
-  // put your setup code here, to run once:
-  servo.attach(ServoPin);
   Serial.begin(9600);
+  delay(500); // Pause to allow internal operations
+
+  chassis.init();
+  blueMotor.setup();
+ 
+  // Servo Setup
+  servo1.attach();
+  servo2.attach();
+  servo1.writeMicroseconds(servo1Pos);
+  servo2.writeMicroseconds(servo2Pos);
+
+  delay(500); // Pause to ensure all previous processes have completed
+  Serial.println("Setup Completed");
 }
 
 void loop() {
-
-    if (val == 'w') {
-      Serial.println("Forward 1cm");
-      target_right += ticksPerCm*1;
-      target_left += ticksPerCm*1;
-      lastCommand = "w";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
+  // Keyboard controls
+  if (Serial.available()) { // If a command is waiting
+    char input = Serial.read();
+    if (input == 'w') { // Move forward
+      leftEffort += dtIncrement;
+      rightEffort += dtIncrement;
+    } 
+    else if (input == 'a') { // Turn left
+      leftEffort -= dtIncrement;
+      rightEffort += dtIncrement;
+    } 
+    else if (input == 's') { // Move backward
+      leftEffort -= dtIncrement;
+      rightEffort -= dtIncrement;
+    } 
+    else if (input == 'd') { // Turn right
+      leftEffort += dtIncrement;
+      rightEffort -= dtIncrement;
+    } 
+    else if (input == 'm') { // Blue motor speed up
+      blueEffort += blueIncrement;
+    } 
+    else if (input == 'n') { //  Blue motor speed down
+      blueEffort -= blueIncrement;
+    } 
+    else if (input == '1') { // Servo one increase position
+      servo1Pos += servoIncrement;
+      servo1.writeMicroseconds(servo1Pos);
+    } 
+    else if (input == '2') { // Servo one decrease position
+      servo1Pos -= servoIncrement;
+      servo1.writeMicroseconds(servo1Pos);
+    } 
+    else if (input == '3') { // Servo two increase position
+      servo2Pos += servoIncrement;
+      servo2.writeMicroseconds(servo2Pos);
+    } 
+    else if (input == '4') { // Servo two decrease position
+      servo2Pos -= servoIncrement;
+      servo2.writeMicroseconds(servo2Pos);
+    } 
+    else if (input == '{' ){ // Stop the motors if { is pressed
+      leftEffort = rightEffort = 0;
+      blueEffort = 0;
     }
 
-    if (val == '2') {
-      Serial.println("Forward 5cm");
-      target_right += ticksPerCm*5;
-      target_left += ticksPerCm*5;
-      lastCommand = "2";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
-    }
+  
+    chassis.setMotorEfforts(leftEffort, rightEffort); // Update wheel motor efforts
+    blueMotor.setEffort(blueEffort); // Update blue motor effort. Will not run at less than ~150 effort magnitude
+  }
 
-    if (val == 'a') {
-      Serial.println("10 degrees CCW");
-      target_right -= ticksPerDegree*10;
-      target_left += ticksPerDegree*10;
-      lastCommand = "a";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
-    }
-
-    if (val == 'd') {
-      Serial.println("10 degrees CW");
-      target_right += ticksPerDegree*10;
-      target_left -= ticksPerDegree*10;
-      lastCommand = "d";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
-    }
-
-    if (val == 's') {
-      Serial.println("Back 1cm");
-      target_right -= ticksPerCm*1;
-      target_left -= ticksPerCm*1;
-      lastCommand = "s";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
-    }
-
-    if (val == 'x') {
-      Serial.println("Back 5cm");
-      target_right -= ticksPerCm*5;
-      target_left -= ticksPerCm*5;
-      lastCommand = "x";
-      Serial.print(target_right);
-      Serial.print(", ");
-      Serial.println(target_left);
-    }
-
-    if (val == 'g') {
-      Serial.println("Servo");
-      lastCommand = "g";
-      servo.write(0);
-    }
-
-    if (!(lastCommand == "a" || lastCommand == "d")) {
-      speed_right = -Kp*(encoders.getCountsRight()-target_right);
-      speed_left = -Kp*(encoders.getCountsRight()-target_left);
-    } else {
-      speed_right = Kp*(encoders.getCountsRight()-target_right);
-      speed_left = -Kp*(encoders.getCountsRight()-target_right);
-    }
-
-
-
-    if (speed_right > 100) {speed_right = 100;}
-    if (speed_right < -100) {speed_right = -100;}
-
-    if (speed_left > 100) {speed_left = 100;}
-    if (speed_left < -100) {speed_left = -100;}
-
-    motors.setSpeeds(speed_right, speed_left);
-
-    val = Serial.read();
-
-    if (fmod(floor(millis()/1000),2) == 0) {
-      // Turn the LEDs on.
-      ledRed(1);
-      ledYellow(1);
-      ledGreen(1);
-      // Serial.println("Blink ON");
-    }
-
-    if (fmod(floor(millis()/1000),2) == 1) {
-      // Turn the LEDs off.
-      ledRed(0);
-      ledYellow(0);
-      ledGreen(0);
-      // Serial.println("Blink OFF");
-    }
+   Serial.println("Servo positions: " + String(servo2Pos) + ", " + String(servo1Pos));
+   //Serial.println("Blue Motor Pos: " + String(blueMotor.getPosition()));
+   //Serial.println("Romi Pos: " + String(chassis.getLeftEncoderCount()) + ", " + String(chassis.getRightEncoderCount()));
+   //Serial.println("Blue Effort: " + String(blueEffort));
 }
