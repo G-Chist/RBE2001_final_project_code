@@ -53,7 +53,7 @@ int servoIncrement = 50; // The amount to increment the servo position by (micro
 char lastInput;
 
 float px = 100;
-float py = 90;
+float py = 165;
 
 // Lengths (mm)
 int l1 = 100;
@@ -99,11 +99,11 @@ float servo1Pos = 1750;
 
 void runBlueMotor() {
   if (blueMotor.getPosition() < blueTarget) {
-      blueEffort = -300;
+      blueEffort = -380;
       blueMotor.setEffort(blueEffort); // Update blue motor effort. Will not run at less than ~150 effort magnitude
     }
     if (blueMotor.getPosition() > blueTarget) {
-      blueEffort = 300;
+      blueEffort = 380;
       blueMotor.setEffort(blueEffort); // Update blue motor effort. Will not run at less than ~150 effort magnitude
     }
 }
@@ -134,19 +134,28 @@ void loop() {
     if (input == 'w') { // Move forward
       leftEffort += dtIncrement;
       rightEffort += dtIncrement;
+      Serial.println("Left effort: " + String(leftEffort) + "; " + "right effort: " + String(rightEffort));
     } 
     else if (input == 'a') { // Turn left
       leftEffort -= dtIncrement;
       rightEffort += dtIncrement;
+      Serial.println("Left effort: " + String(leftEffort) + "; " + "right effort: " + String(rightEffort));
     } 
     else if (input == 's') { // Move backward
       leftEffort -= dtIncrement;
       rightEffort -= dtIncrement;
+      Serial.println("Left effort: " + String(leftEffort) + "; " + "right effort: " + String(rightEffort));
     } 
     else if (input == 'd') { // Turn right
       leftEffort += dtIncrement;
       rightEffort -= dtIncrement;
-    } /*
+      Serial.println("Left effort: " + String(leftEffort) + "; " + "right effort: " + String(rightEffort));
+    } 
+    else if (input == '`') { // Stop drivetrain
+      leftEffort = 0;
+      rightEffort = 0;
+      Serial.println("Left effort: " + String(leftEffort) + "; " + "right effort: " + String(rightEffort));
+    }/*
     else if (input == 'm') { // Blue motor speed up
       blueEffort += blueIncrement;
     } 
@@ -180,7 +189,7 @@ void loop() {
     } 
 
     else if (input == 'o') { // Open grabber
-      servo2.writeMicroseconds(1200);
+      servo2.writeMicroseconds(1000);
     } 
 
     else if (input == '3') { // Go up
